@@ -1,0 +1,87 @@
+esphome:
+  name: counter
+  friendly_name: counter
+
+esp8266:
+  board: d1_mini
+
+# Enable logging
+logger:
+
+globals:
+  - id: counter
+    type: int
+    restore_value: yes
+    initial_value: '0'
+
+display:
+  - platform: tm1637
+    id: tm1637_display
+    clk_pin: GPIO4
+    dio_pin: GPIO5
+    intensity: 1
+    update_interval: 100ms
+    lambda: |-
+      if (id(counter) < 0) {
+        it.printf(0, "-%03d", abs(id(counter)));
+      } else {
+        it.printf(0, "%4d", id(counter));
+      }
+
+binary_sensor:
+  # --- Increment button (GPIO0) ---
+  - platform: gpio
+    id: btn_up
+    pin:
+      number: GPIO14
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Button Up"
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_press:
+      then:
+        - lambda: |-
+            if (!id(btn_down).state) {
+              id(counter) += 1;
+              ESP_LOGI("counter", "Value: %d", id(counter));
+            }
+
+  # --- Decrement button (GPIO2) ---
+  - platform: gpio
+    id: btn_down
+    pin:
+      number: GPIO12
+      mode: INPUT_PULLUP
+      inverted: true
+    name: "Button Down"
+    filters:
+      - delayed_on: 10ms
+      - delayed_off: 10ms
+    on_press:
+      then:
+        - lambda: |-
+            if (!id(btn_up).state) {
+              if(id(counter) > -999) {
+                id(counter) -= 1;
+                ESP_LOGI("counter", "Value: %d", id(counter));
+              }
+            }
+
+# --- Both held: reset to 0 ---
+  - platform: template
+    id: both_held
+    name: "Both Buttons Held"
+    lambda: |-
+      return id(btn_up).state && id(btn_down).state;
+    on_press:
+      then:
+        - delay: 1s
+        - lambda: |-
+            if (id(both_held).state) {
+              if(id(counter) < 9999) {
+                id(counter) = 0;
+                ESP_LOGI("counter", "Reset! Value: %d", id(counter));
+              }
+            }
